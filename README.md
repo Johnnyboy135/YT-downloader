@@ -21,6 +21,35 @@ uploaded to [Releases](https://github.com/Johnnyboy135/YT-downloader/releases).
 
 The installer is currently unsigned; no signing certificate is included in this repository.
 
+## Shorts transcripts and channel reports
+
+Open the **Shorts transcripts** tab and paste either:
+
+- An individual Shorts link (or its `youtu.be` sharing link) to get one transcript.
+- A channel link or `@handle`, then choose **Number of Shorts** (1–200, default 10).
+
+Click **Get transcripts**. Channel reports use the channel's Shorts tab, in the
+latest-first order returned by YouTube, rather than mixing in long-form uploads.
+Each result includes the video title/link, posting date, view count, collection
+time, transcript language, and transcript source. Select a row to read/copy it.
+Export the report as **CSV (Excel)**, **text**, or **JSON**. The timestamp checkbox
+controls the preview and text/CSV exports; JSON always includes timed segments.
+
+The app tries creator captions and then YouTube's automatic captions, preferring
+the video's language when available. If those cannot be used, the optional audio
+fallback transcribes accessible audio locally with the multilingual Whisper base
+model. First use downloads roughly 150 MB of model weights from Hugging Face;
+later runs reuse the cache in `%LOCALAPPDATA%\YT-downloader\models` on Windows.
+No API key or paid transcription service is required. Temporary audio is removed
+after processing. Speech-to-text can make mistakes, especially with music or noise.
+
+Views are snapshots, not live counters. Unavailable metadata stays blank instead
+of being invented; video/caption access errors appear in the affected row while
+the rest of the report continues. YouTube may restrict or rate-limit requests.
+Cancel retains completed rows for export and takes effect after the current
+network/model operation. It does not bypass login, age, geographic, or other
+access restrictions.
+
 ## Run from source
 
 1. Install Python 3.11 or newer.

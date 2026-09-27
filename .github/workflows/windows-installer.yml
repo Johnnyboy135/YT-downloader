@@ -41,6 +41,18 @@ jobs:
           } finally {
             if (-not $app.HasExited) { Stop-Process -Id $app.Id }
           }
+      - name: Check packaged transcription runtime and report UI
+        shell: pwsh
+        run: |
+          $report = Join-Path $PWD 'packaged-check.json'
+          $app = Start-Process '.\dist\YouTube Downloader\YouTube Downloader.exe' -ArgumentList @('--self-test', ('"' + $report + '"')) -PassThru
+          if (-not $app.WaitForExit(120000)) {
+            Stop-Process -Id $app.Id
+            throw 'Packaged transcription check timed out'
+          }
+          if (Test-Path $report) { Get-Content $report }
+          if ($app.ExitCode -ne 0 -or -not (Test-Path $report)) { throw 'Packaged transcription check failed' }
+          if (-not (Get-Content $report -Raw | ConvertFrom-Json).ok) { throw 'Packaged transcription check failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-installer-x64

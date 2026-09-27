@@ -9,6 +9,11 @@ FFmpeg/ffprobe, and Deno. Their license notices are included in the installed
 - yt-dlp: https://github.com/yt-dlp/yt-dlp (Unlicense; dependencies have their own licenses)
 - yt-dlp-ejs: https://github.com/yt-dlp/ejs
 - Deno: https://github.com/denoland/deno (MIT; third-party notices in its source tree)
+- faster-whisper: https://github.com/SYSTRAN/faster-whisper (MIT)
+- CTranslate2: https://github.com/OpenNMT/CTranslate2 (MIT)
+- Whisper model weights, downloaded on first use: https://huggingface.co/Systran/faster-whisper-base (MIT)
+- Speech inference dependencies include PyAV, ONNX Runtime, NumPy, Hugging Face Hub,
+  and Tokenizers. Their package license notices are included in the installer.
 - FFmpeg 9.0.2: https://www.gyan.dev/ffmpeg/builds/ (GPLv3 build)
   - FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/n9.0.2
   - Build information and external library versions: bundled ffmpeg README and

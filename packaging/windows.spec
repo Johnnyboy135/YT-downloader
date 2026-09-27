@@ -12,6 +12,11 @@ datas += ejs_data + [
 ]
 binaries += ejs_binaries
 hiddenimports += ejs_imports
+for package in ('faster_whisper', 'ctranslate2'):
+    package_data, package_binaries, package_imports = collect_all(package)
+    datas += package_data
+    binaries += package_binaries
+    hiddenimports += package_imports
 a = Analysis([str(root / 'app.py')], pathex=[str(root)], binaries=binaries,
              datas=datas, hiddenimports=hiddenimports)
 pyz = PYZ(a.pure)

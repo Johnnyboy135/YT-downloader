@@ -65,8 +65,8 @@ class DownloadApp(tk.Tk):
         super().__init__()
 
         self.title("YouTube Downloader")
-        self.geometry("820x620")
-        self.minsize(720, 540)
+        self.geometry("1040x800")
+        self.minsize(920, 720)
         icon = Path(__file__).resolve().parent / "assets" / "app.ico"
         if sys.platform == "win32" and icon.is_file():
             self.iconbitmap(str(icon))
@@ -100,7 +100,16 @@ class DownloadApp(tk.Tk):
             self._log("ffmpeg not found. Best-available video can still work, but audio conversion needs ffmpeg.")
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=18)
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True)
+        download_tab = ttk.Frame(notebook)
+        notebook.add(download_tab, text="Video / audio download")
+        if yt_dlp is not None:
+            from transcript_ui import TranscriptPanel
+
+            self.transcript_panel = TranscriptPanel(notebook, ffmpeg=self.ffmpeg_path, deno=bundled_tool("deno.exe"))
+            notebook.add(self.transcript_panel, text="Shorts transcripts")
+        root = ttk.Frame(download_tab, padding=18)
         root.pack(fill="both", expand=True)
         root.columnconfigure(1, weight=1)
         root.rowconfigure(9, weight=1)
@@ -231,12 +240,12 @@ class DownloadApp(tk.Tk):
         self.status_var.set("Downloading...")
         self._log(f"Starting: {url}")
 
-        self.worker = threading.Thread(target=self._download, args=(url, folder), daemon=True)
+        options = self._yt_dlp_options(folder)
+        self.worker = threading.Thread(target=self._download, args=(url, options), daemon=True)
         self.worker.start()
 
-    def _download(self, url: str, folder: Path) -> None:
+    def _download(self, url: str, options: dict) -> None:
         try:
-            options = self._yt_dlp_options(folder)
             with yt_dlp.YoutubeDL(options) as downloader:
                 downloader.download([url])
             self.messages.put(("status", "Done"))
@@ -334,6 +343,17 @@ class DownloadApp(tk.Tk):
 
 
 if __name__ == "__main__":
+    # GUI executables have no console; dependency loggers still expect streams.
+    import os
+
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+    if len(sys.argv) == 3 and sys.argv[1] == "--self-test":
+        from runtime_checks import run
+
+        raise SystemExit(run(DownloadApp, sys.argv[2]))
     if sys.platform == "win32":
         import ctypes
 
