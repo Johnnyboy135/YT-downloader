@@ -1,0 +1,63 @@
+name: Windows installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+      - name: Build installer
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne ('v' + (Get-Content VERSION -Raw).Trim())) {
+            throw 'Release tag must match VERSION'
+          }
+          ./build-windows.ps1
+      - name: Check packaged app launches
+        shell: pwsh
+        run: |
+          $app = Start-Process '.\dist\YouTube Downloader\YouTube Downloader.exe' -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              $app.Refresh()
+              if ($app.HasExited) { throw "Packaged app exited during startup" }
+              if ($app.MainWindowTitle -eq 'YouTube Downloader') { $ready = $true; break }
+            }
+            if (-not $ready) { throw "Packaged app did not show its main window" }
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-installer-x64
+          path: installer-output/*.exe
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows-installer-x64
+          path: installer-output
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: installer-output/*.exe
+          generate_release_notes: true

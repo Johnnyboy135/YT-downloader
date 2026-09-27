@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import re
 import shutil
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -20,7 +21,22 @@ YOUTUBE_URL_RE = re.compile(
 )
 
 
+def bundled_tool(name: str) -> Path | None:
+    """Find tools next to the executable or inside a PyInstaller bundle."""
+    roots = [Path(__file__).resolve().parent]
+    if getattr(sys, "frozen", False):
+        roots.insert(0, Path(sys.executable).resolve().parent)
+    for root in roots:
+        candidate = root / "tools" / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def find_ffmpeg() -> Path | None:
+    bundled = bundled_tool("ffmpeg.exe")
+    if bundled:
+        return bundled
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg:
         return Path(ffmpeg)
@@ -51,6 +67,9 @@ class DownloadApp(tk.Tk):
         self.title("YouTube Downloader")
         self.geometry("820x620")
         self.minsize(720, 540)
+        icon = Path(__file__).resolve().parent / "assets" / "app.ico"
+        if sys.platform == "win32" and icon.is_file():
+            self.iconbitmap(str(icon))
 
         self.messages: queue.Queue[tuple[str, str | float]] = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -241,6 +260,9 @@ class DownloadApp(tk.Tk):
         }
         if self.ffmpeg_path:
             options["ffmpeg_location"] = str(self.ffmpeg_path.parent)
+        deno = bundled_tool("deno.exe")
+        if deno:
+            options["js_runtimes"] = {"deno": {"path": str(deno)}}
 
         if self.mode_var.get() == "audio":
             audio_format = self.audio_format_var.get()
@@ -312,5 +334,9 @@ class DownloadApp(tk.Tk):
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Johnnyboy135.YTDownloader")
     app = DownloadApp()
     app.mainloop()
