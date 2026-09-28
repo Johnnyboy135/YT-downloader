@@ -8,7 +8,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
-from transcripts import ReportCancelled, ReportService, normalize_target
+from transcripts import ReportCancelled, normalize_target
+from mcp_extraction import BoundedReportService
 
 TERMINAL = {"completed", "failed", "cancelled"}
 
@@ -41,10 +42,11 @@ class Job:
     results: list[dict] = field(default_factory=list)
     cancel: threading.Event = field(default_factory=threading.Event)
     done: threading.Event = field(default_factory=threading.Event)
+    worker: threading.Thread | None = field(default=None, repr=False)
 
 
 class TranscriptJobs:
-    def __init__(self, service_factory=ReportService, history_limit=20):
+    def __init__(self, service_factory=BoundedReportService, history_limit=20):
         self.service_factory = service_factory
         self.history_limit = history_limit
         self.jobs: dict[str, Job] = {}
@@ -67,8 +69,9 @@ class TranscriptJobs:
                 del self.jobs[next(iter(self.jobs))]
             job = Job(uuid4().hex, url, 1 if kind == "video" else count, audio_fallback)
             self.jobs[job.job_id] = job
-            threading.Thread(target=self._run, args=(job,), daemon=True,
-                             name="shorts-transcripts").start()
+            job.worker = threading.Thread(target=self._run, args=(job,), daemon=True,
+                                          name="shorts-transcripts")
+            job.worker.start()
             return self._snapshot(job)
 
     def _run(self, job: Job):
@@ -137,12 +140,18 @@ class TranscriptJobs:
             if not job.done.is_set():
                 job.cancel.set()
                 job.state = "cancelling"
-                job.message = "Cancellation requested; waiting for the current network/model operation."
+                job.message = "Cancellation requested; stopping the extraction worker."
             return self._snapshot(job)
 
     def close(self):
         with self.lock:
             self.closed = True
+            workers = []
             for job in self.jobs.values():
                 if not job.done.is_set():
                     job.cancel.set()
+                    if job.worker:
+                        workers.append(job.worker)
+        # Allow worker termination and temporary-audio cleanup before server exit.
+        for worker in workers:
+            worker.join(timeout=6)

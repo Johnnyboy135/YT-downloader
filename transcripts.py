@@ -7,14 +7,17 @@ import io
 import json
 import os
 import re
+import shutil
 import tempfile
 import threading
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs, urlsplit
+from uuid import uuid4
 
 import yt_dlp
 from yt_dlp.networking import Request
@@ -25,6 +28,20 @@ MAX_SHORTS = 200
 
 class ReportCancelled(Exception):
     pass
+
+
+@contextmanager
+def temporary_audio_directory():
+    root = Path(tempfile.gettempdir()).resolve()
+    folder = root / ("yt-shorts-" + uuid4().hex)
+    # Inherit Windows ACLs; mode 0700 used by mkdtemp can exclude restricted tokens.
+    folder.mkdir()
+    try:
+        yield folder
+    finally:
+        if folder.resolve().parent != root:
+            raise RuntimeError("Temporary audio directory moved outside its parent; cleanup stopped.")
+        shutil.rmtree(folder)
 
 
 @dataclass
@@ -213,6 +230,16 @@ class ReportService:
             options["js_runtimes"] = {"deno": {"path": str(self.deno)}}
         return options
 
+    def list_entries(self, url: str, count: int) -> list[dict]:
+        options = self.options() | {"extract_flat": "in_playlist", "lazy_playlist": True,
+                                    "playlistend": count, "noplaylist": False}
+        with self.ydl_factory(options) as ydl:
+            listing = ydl.extract_info(url, download=False)
+            self.check_cancel()
+            if not listing:
+                raise ValueError("The channel could not be read. Check the link and try again.")
+            return list(islice(listing.get("entries") or [], count))
+
     def collect(self, target: str, count: int, audio_fallback: bool,
                 on_result: Callable[[TranscriptResult], None],
                 on_status: Callable[[str], None] = lambda value: None,
@@ -225,14 +252,7 @@ class ReportService:
             entries = [{"id": url.rsplit("/", 1)[-1]}]
         else:
             on_status("Reading the channel's latest Shorts…")
-            options = self.options() | {"extract_flat": "in_playlist", "lazy_playlist": True,
-                                        "playlistend": count, "noplaylist": False}
-            with self.ydl_factory(options) as ydl:
-                listing = ydl.extract_info(url, download=False)
-                self.check_cancel()
-                if not listing:
-                    raise ValueError("The channel could not be read. Check the link and try again.")
-                entries = list(islice(listing.get("entries") or [], count))
+            entries = self.list_entries(url, count)
             if not entries:
                 raise ValueError("No public Shorts were found on that channel.")
         results = []
@@ -257,7 +277,8 @@ class ReportService:
         return results
 
     def collect_video(self, video_id: str, title: str, audio_fallback: bool,
-                      on_status: Callable[[str], None]) -> TranscriptResult:
+                      on_status: Callable[[str], None],
+                      on_metadata: Callable[[TranscriptResult], None] = lambda result: None) -> TranscriptResult:
         result = TranscriptResult(video_id, title, f"https://www.youtube.com/shorts/{video_id}")
         try:
             with self.ydl_factory(self.options()) as ydl:
@@ -270,9 +291,11 @@ class ReportService:
                 result.view_count = count if isinstance(count, int) and count >= 0 else None
                 result.date_posted = format_date(info)
                 result.collected_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                on_metadata(result)
                 caption_error = "No usable captions were available."
                 for source, language, track in islice(caption_tracks(info), 3):
                     self.check_cancel()
+                    on_status(f"Reading {source} ({language})…")
                     try:
                         headers = info.get("http_headers", {}) | track.get("http_headers", {})
                         with ydl.urlopen(Request(track["url"], headers=headers)) as response:
@@ -330,7 +353,7 @@ class ReportService:
             raise RuntimeError(self.model_error)
         self.check_cancel()
         # Audio is temporary and is removed after transcription, including on failure.
-        with tempfile.TemporaryDirectory(prefix="yt-shorts-") as temporary:
+        with temporary_audio_directory() as temporary:
             folder = Path(temporary)
             options = self.options() | {"skip_download": False, "format": "bestaudio/best",
                                         "outtmpl": str(folder / "audio.%(ext)s"),

@@ -4,6 +4,7 @@ from typing import Annotated, Any
 
 import anyio
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -46,7 +47,10 @@ def start_shorts_transcripts(
     One job runs at a time. Uses public YouTube content without login or API keys.
     Audio fallback caches the speech model locally and deletes temporary audio after use.
     """
-    return jobs.start(target, count, audio_fallback)
+    try:
+        return jobs.start(target, count, audio_fallback)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
@@ -61,17 +65,23 @@ async def get_transcript_job(
     check each result's status/error. Timed segments and full text are both returned.
     The last 20 jobs remain in memory until the server/Claude restarts.
     """
-    return await anyio.to_thread.run_sync(jobs.get, job_id, wait_seconds)
+    try:
+        return await anyio.to_thread.run_sync(jobs.get, job_id, wait_seconds)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False,
                                      idempotent_hint=True, open_world_hint=False))
 def cancel_transcript_job(job_id: str) -> dict[str, Any]:
-    """Cancel collection after the current operation; retain finished video results.
+    """Stop the active extraction worker; retain finished video results.
 
     Poll get_transcript_job until cancellation finishes. Already completed jobs are unchanged.
     """
-    return jobs.cancel_job(job_id)
+    try:
+        return jobs.cancel_job(job_id)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 if __name__ == "__main__":

@@ -92,6 +92,13 @@ Tools exposed to Claude:
 Results include full transcript text, timed segments, title, URL, views, posting date,
 collection time, language, source, and per-video errors. Missing metadata stays unknown.
 One job runs at a time; the last 20 jobs stay in memory and are cleared on restart.
+Extraction runs in child processes with hard time limits: 30 seconds for a channel
+listing, 45 seconds per video's details/captions, and 5 minutes for audio fallback
+(including first-use model download). If captions stall, audio fallback is still
+attempted when enabled. Available metadata survives a caption timeout. Failed
+videos are reported and the next video continues. Cancellation stops the worker
+and its child processes, then removes temporary audio. Restarting Claude clears
+old job IDs; start a new job after restarting rather than polling an old ID.
 The connector only fetches public YouTube content, apart from downloading speech-model
 weights when needed. It does not expose shell execution or file browsing to Claude.
 Transcript text is returned to Claude for use in your conversation.

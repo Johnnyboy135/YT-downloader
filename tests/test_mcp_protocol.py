@@ -21,6 +21,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(result["isError"])
             unknown = client.call("get_transcript_job", {"job_id": "not-a-job", "wait_seconds": 0})
             self.assertTrue(unknown["isError"])
+            self.assertIn("Unknown or expired job ID", unknown["content"][0]["text"])
 
     async def test_tools_return_transcript_data_through_mcp(self):
         from mcp import Client
