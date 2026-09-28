@@ -50,6 +50,56 @@ Cancel retains completed rows for export and takes effect after the current
 network/model operation. It does not bypass login, age, geographic, or other
 access restrictions.
 
+## Claude Desktop MCP connector
+
+Claude Desktop can call the same transcript engine directly from chat. For example:
+"Get transcripts, view counts, and posting dates for the latest 5 Shorts from @ChannelName."
+It also accepts an individual Shorts link. The MCP connector limits channel requests
+to 1–10 Shorts; the desktop app's existing 1–200 option is unchanged.
+
+The connector runs locally over stdio with no API key or listening network port.
+It is a separate source entry point; you do not need to replace the Windows app.
+Keep this checkout and its Python environment in place after configuration.
+
+From a checkout with Python 3.11+ installed:
+
+```powershell
+python -m venv .venv-mcp
+.\.venv-mcp\Scripts\python.exe -m pip install -r requirements-mcp.txt
+.\.venv-mcp\Scripts\python.exe setup_claude_mcp.py
+```
+
+The setup helper preserves existing Claude settings and MCP connections, backs up
+an existing config before changing it, and detects both the regular Windows and
+Microsoft Store Claude config locations. If multiple configs exist, pass the
+correct file using `--config "C:\path\to\claude_desktop_config.json"`.
+Use `--print-config` to preview the entry without writing any settings.
+Fully quit Claude Desktop and reopen it, then enable **youtube-shorts** in its tools.
+
+For YouTube's JavaScript support, install Deno on PATH or install this app's Windows
+build. The connector finds bundled Deno/FFmpeg in the installed app, local `tools/`,
+or `build/vendor/tools/`, then checks PATH. Caption retrieval usually needs no FFmpeg;
+audio fallback uses the same Whisper model/cache and temporary-audio cleanup as the app.
+The first audio fallback downloads roughly 150 MB, and can take several minutes.
+
+Tools exposed to Claude:
+
+- `start_shorts_transcripts(target, count=10, audio_fallback=true)` starts collection.
+- `get_transcript_job(job_id, wait_seconds=20)` returns progress and available results.
+  Claude should repeat this until `completed`, `failed`, or `cancelled`.
+- `cancel_transcript_job(job_id)` requests cancellation and retains completed rows.
+
+Results include full transcript text, timed segments, title, URL, views, posting date,
+collection time, language, source, and per-video errors. Missing metadata stays unknown.
+One job runs at a time; the last 20 jobs stay in memory and are cleared on restart.
+The connector only fetches public YouTube content, apart from downloading speech-model
+weights when needed. It does not expose shell execution or file browsing to Claude.
+Transcript text is returned to Claude for use in your conversation.
+
+To remove the connection, delete only `mcpServers.youtube-shorts` from Claude's config
+and restart Claude. The source environment and model cache can then be removed separately.
+MCP protocol checks run in the **Claude Desktop MCP** GitHub Actions workflow.
+
 ## Run from source
 
 1. Install Python 3.11 or newer.

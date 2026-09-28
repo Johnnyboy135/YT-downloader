@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 downloads/
 .venv-build/
+.venv-mcp/
 build/
 dist/
 installer-output/
